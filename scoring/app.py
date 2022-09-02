@@ -2,18 +2,21 @@ from flask import Flask, request, jsonify
 import pickle
 import pandas as pd
 from datetime import datetime
-# from flask_limiter import Limiter
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
-# limiter = Limiter(
-#     app,
-#     key_func=lambda: request.json['user_id'],
-#     default_limits=["200 per day", "50 per hour"],
-#     storage_uri="memory://",
-# )
+
+user_id_limiter = Limiter(
+    app,
+    key_func=lambda: request.json['user_id'],
+    storage_uri="memory://",
+)
 
 @app.route('/recommendation', methods=['POST'])
-# @limiter.limit("3/minute")
+@user_id_limiter.limit("3/minute")
+# @limiter.limit("5/hour", key_func=lambda: request.json['user_id'])
+
 def index():
     data = request.json
     recommendation = 'decline'
@@ -29,11 +32,15 @@ def index():
         print('Error recommendation', e)
         recommendation = 'decline'
 
-    return jsonify({ 'transaction_id': data['transaction_id'], 'recommendation': recommendation})
+    return jsonify({ 'transaction_id': data['transaction_id'],
+                     'recommendation': recommendation })
 
 
 def is_rule_based_approved(data):
     if data['device_id'] is None:
+        return False
+    transaction_date = datetime.strptime(data['transaction_date'], '%Y-%m-%dT%H:%M:%S.%f')
+    if 2 <= transaction_date.hour <= 6:
         return False
     return True
 
